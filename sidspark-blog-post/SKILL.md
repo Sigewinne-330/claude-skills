@@ -15,7 +15,7 @@ description: "为用户的WordPress博客Sidspark（sidspark.site）写物理/�
 | `scripts/svgkit.py` | 画图小工具（开头有用法示例） | 写 `make_figs.py` 前看一眼文件开头的 docstring |
 | `scripts/texcheck.js` | 用 MathJax 编译每条公式，报错 | 直接运行，不用读 |
 | `reference/style.md` | Sidspark 写作风格 | 第 2 步定结构前 |
-| `reference/wordpress.md` | 通过 Claude in Chrome 推送与验证 | 第 7 步推送前 |
+| `reference/wordpress.md` | 通过 `chrome-devtools` MCP 推送与验证 | 第 7 步推送前 |
 
 下文 `$SKILL` 指本 skill 文件夹（SKILL.md 所在目录）的绝对路径；在 shell 里先 `SKILL=<该路径>`。
 脚本已在实际发文中验证过，直接调用，**不要把它们复制或改写到别处**。发现 bug 时告诉用户，以便修改仓库里的脚本。
@@ -51,7 +51,7 @@ description: "为用户的WordPress博客Sidspark（sidspark.site）写物理/�
 ## 3. 画图
 
 写一个 `make_figs.py`，开头 `import sys; sys.path.insert(0, "<$SKILL 的绝对路径>/scripts"); from svgkit import *`，每张图输出一个 `figs/<name>.svg`。图要简洁：浅米色填充表示物体，深色描边，红/蓝箭头表示运动量，灰色小字做注释。
-每张图都用 `rsvg-convert -w 1000 -b white figs/x.svg -o figs/x.png` 渲染出来，**用 Read 看一眼**，把文字压线、标签出界之类的问题改掉——这一步每次都能发现问题。
+每张图都用 `rsvg-convert -w 1000 -b white figs/x.svg -o figs/x.png` 渲染出来，**用 Read 看一眼**，把文字压线、标签出界之类的问题改掉——这一步每次都能发现问题（若本机未安装 `rsvg-convert`，可在推送后通过预览页或浏览器检查渲染尺寸与排版）。
 svgkit 内置的规则（不要绕开）：不用 `<style>`；marker id 按图加前缀以免全页冲突；SVG 文字里不能出现 `$`。
 
 ## 4. 源稿格式（post.txt）
@@ -94,7 +94,7 @@ NODE_PATH=$PWD/node_modules node "$SKILL/scripts/texcheck.js" out/maths.json
 ```
 
 `build_post.py` 输出：`out/post.json`（标题/摘要/正文）、`out/post_content.html`（区块代码）、`out/maths.json`、`out/chunkN.js` 分段文件，并打印每段的 (长度, 码点和) 校验值——推送时要用。
-`texcheck.js` 必须是 `errors 0` 才能继续。
+`texcheck.js` 必须是 `errors 0` 才能继续（若本机无 `npm` / `mathjax-full`，必须在后续第 7 步的 WordPress 预览页中确认 `mj` 数量一致且 `errs === 0`）。
 
 ## 6. 通读润色
 
@@ -103,11 +103,11 @@ NODE_PATH=$PWD/node_modules node "$SKILL/scripts/texcheck.js" out/maths.json
 ## 7. 推送与验证
 
 先读 `reference/wordpress.md`，里面有可直接用的 JS 片段和这个站点的坑。要点：
-- 先加载 Claude in Chrome 工具；这个站的页面永远到不了 document_idle，截图/读页面/上传文件都会超时，**全部用 `javascript_tool`**。
+- 使用 `chrome-devtools` MCP（`list_pages`、`new_page`、`navigate_page`、`evaluate_script`）；这个站的页面永远到不了 `document_idle`，因此 `navigate_page` / `new_page` 设置 `timeout: 15000`，**全部 JS 操作用 `evaluate_script` 且传 `waitForStableDom: false`**。
 - 内容按 `chunkN.js` 分段原样贴进 `window.__parts[N]`，每段核对长度和码点和，再拼接核对总值。
-- 用 REST API 建草稿（`status: 'draft'`），分类按名称找（物理类用 Physics Club），标签先按名称复用、没有再新建。
+- 用 REST API 建草稿（默认 `status: 'draft'`；仅当用户明确要求“不公开的发布/私密发布”时才用 `status: 'private'`），分类按名称找（物理类用 Physics Club），标签先按名称复用、没有再新建。
 - 四项验证全部通过：存储内容与发送内容一致且公式未被 texturize 改动；编辑器内无无效区块；预览页公式数 = 构建时的数量、无 MathJax 错误、图都有宽度；最后把标签页停在文章编辑页。
-- **永远不要替用户发布**；改已发布的文章前先问。
+- **永远不要替用户公开发布（`publish`）**；改已发布的文章前先问。
 
 ## 8. 汇报
 
